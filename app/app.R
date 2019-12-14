@@ -1,11 +1,4 @@
-#
-# This is a Shiny web application. You can run the application by clicking
-# the 'Run App' button above.
-#
-# Find out more about building applications with Shiny here:
-#
-#    http://shiny.rstudio.com/
-#
+# load necessary packages
 
 library(shiny)
 library(ggplot2)
@@ -14,10 +7,15 @@ library(dplyr)
 library(ggthemes)
 library(plotly)
 
+# read in rds files w/ cleaned data
+
 data_1 <- read_rds("clean_data/data_1.rds")
 data_2 <- read_rds("clean_data/data_2.rds")
 
 ui <- navbarPage("Homelessness in the U.S.",
+                 
+                 # Overview tab with text information 
+                 
                  tabPanel("Overview",
                           h1("Background"),
                           textOutput("text_1"),
@@ -26,10 +24,19 @@ ui <- navbarPage("Homelessness in the U.S.",
                           h3("Data & Contact"),
                           textOutput("text_3")
                  ),
+                 
+                 # Overall tab for graphs with general trends
+                 
                  tabPanel("Overall",
                           h2("General trends"),
+                          
+                          # create drop down for user selecting state
+                          
                           sidebarPanel(
                               selectInput("state", "Select a state", list("Total", 
+                                                                          
+                                                                          # separate by region for easier selecting
+                                                                          
                                                                           `Northeast` = list("ME", "VT", "NH", "MA", "RI", "PA", "NY", "NJ", "CT"),
                                                                           `West` = list("WA", "OR", "CA", "NV", "ID", "AZ", "UT", "MT", "WY", "CO", "NM"),
                                                                           `Midwest` = list("ND", "SD", "NE", "KS", "MN", "IA", "MO", "WI", "IL", "IN", "MI", "OH"),
@@ -44,9 +51,15 @@ ui <- navbarPage("Homelessness in the U.S.",
                               plotlyOutput("plot_2")
                           )
                  ),
+                 
+                 # Model tab for modeling graphs
+                 
                  tabPanel("Model",
                           h2("How effectively is our country meeting the housing needs of its homeless population?"),
                           br(),
+                          
+                          # create drop down for user selecting year
+                          
                           sidebarPanel(
                               selectInput("year", "Select a year", c("2018", "2017", "2016", "2015", "2014", "2013", "2012", "2011", "2010", "2009", "2008", "2007"), selected = "2018"), 
                               width = 2),
@@ -69,36 +82,69 @@ server <- function(input, output) {
     
     output$plot_1 <- renderPlotly({
         plot_1 <- data_1 %>%
+            
+            # filter data based on user's choice of state
+            
             filter(State == input$state) %>%
             ggplot(aes(x = year, y = `Overall Homeless`)) +
                 geom_point() +
+            
+            # join points to show trend
+            
                 geom_path(aes(group = 1, color = State)) +
                 labs(title = "Trends in number of people experiencing homelessness from 2007 - 2018")
     })
     
     output$plot_2 <- renderPlotly({
         plot_2 <- data_2 %>%
+            
+            # filter data based on user's choice of state
+            
             filter(State == input$state) %>%
             ggplot(aes(x = year, y = `Total Year-Round Beds (ES, TH, SH)`)) +
                 geom_point() +
+                
+                # join points to show trend
+            
                 geom_path(aes(group = 1, color = State)) +
                 labs(title = "Trends in number of beds available for people who experience homelessness from 2007 - 2018")
     })
     
     output$plot_3 <- renderPlotly({
         plot_3 <- merge(data_1, data_2, by = c("year", "State")) %>%
+            
+            # filter to remove outliers and display data more clearly
+            
             filter(`Overall Homeless` < 150000) %>%
+            
+            # filter data based on user's choice of year
+            
             filter(year == input$year) %>%
             ggplot(aes(x = `Overall Homeless`, y = `Total Year-Round Beds (ES, TH, SH)`)) +
+                
+                # jitter to show data points more clearly
+            
                 geom_jitter() +
+            
+                # create & show linear regression model
+            
                 geom_smooth(method = "lm", se = FALSE) +
                 labs(title = "Relationship between number of beds available and homeless individuals", x = "Average annual number of homeless individuals (by state)")
     })
     
     output$plot_4 <- renderPlotly({
+        
+        # merge two datasets by state and year
+        
         plot_4 <- merge(data_1, data_2, by = c("year", "State")) %>%
+            
+            # filter data based on user's choice of year
+            
             filter(year == input$year) %>%
             filter(State != "Total") %>%
+            
+            # calculate a new column of percentage of unsheltered homeless individuals
+            
             mutate(percent = 100*`Unsheltered Homeless` / `Overall Homeless`) %>%
             ggplot(aes(x = State, y = percent, color = State)) +
                 geom_col() +
@@ -107,13 +153,28 @@ server <- function(input, output) {
     })
     
     output$plot_5 <- renderPlotly({
+        
+        # merge two datasets by state and year
+        
         plot_5 <- merge(data_1, data_2, by = c("year", "State")) %>%
+            
+            # filter to eliminate outliers
+            
             filter(`Overall Homeless` < 150000) %>%
+            
+            # group by year and nest to prepare for mapping regression
+            
             group_by(year) %>%
             nest() %>%
+            
+            # perform a linear regression for each year and extract the slope coefficient
+            
             mutate(model = map(data, ~ lm(`Total Year-Round Beds (ES, TH, SH)` ~ `Overall Homeless`, data = .x))) %>% 
             mutate(coefficients = map(model, ~ coef(.x))) %>%
             mutate(slope = map_dbl(coefficients, ~ pluck(.x, "`Overall Homeless`"))) %>%
+            
+            # graph the slope value over time (year)
+            
             ggplot(aes(x = year, y = slope)) +
                 geom_point() +
                 geom_path(aes(group = 1)) +
