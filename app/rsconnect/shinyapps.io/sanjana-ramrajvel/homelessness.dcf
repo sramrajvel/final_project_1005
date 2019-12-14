@@ -1,0 +1,12 @@
+name: homelessness
+title: homelessness
+username:
+account: sanjana-ramrajvel
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 1560507
+bundleId: 2666897
+url: https://sanjana-ramrajvel.shinyapps.io/homelessness/
+when: 1576297955.1799
+asMultiple: FALSE
+asStatic: FALSE
